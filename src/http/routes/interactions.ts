@@ -1,6 +1,5 @@
 import { FastifyPluginAsync } from "fastify"
 import { verifyKey } from "discord-interactions"
-
 import {
     APIApplicationCommandInteraction,
     APIMessageComponentInteraction,
