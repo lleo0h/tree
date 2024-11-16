@@ -1,0 +1,17 @@
+{
+    "main": "src/index.ts",
+    "scripts": {
+        "build": "tsc",
+        "start": "node --env-file=.env dist/src/index.js"
+    },
+    "dependencies": {
+        "discord-api-types": "^0.37.103",
+        "discord-interactions": "^4.1.0",
+        "fastify": "^4.28.1",
+        "oceanic.js": "^1.11.2"
+    },
+    "devDependencies": {
+        "@types/node": "^22.9.0",
+        "typescript": "^5.6.3"
+    }
+}
