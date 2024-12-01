@@ -5,12 +5,15 @@ import { AnyCommand, CommandArguments } from "../models/createCommand.js"
 
 export class Client extends Oceanic.Client {
     command = new CommandManager(this)
-
     constructor() {
         super({
-            auth: `Bot ${process.env.TOKEN}`,
+            auth: `Bot ${process.env.BOT_TOKEN}`,
             disableCache: 'no-warning',
         })
+    }
+
+    get verifyKey(): string {
+        return (this.application as Oceanic.ClientApplication & Oceanic.JSONApplication).verifyKey
     }
 
     mappingSlash(commands: AnyCommand<CommandArguments>[], subcommand?: boolean): Oceanic.CreateApplicationCommandOptions[] {
@@ -44,13 +47,13 @@ export class Client extends Oceanic.Client {
         )
     }
 
-    get verifyKey(): string {
-        return (this.application as Oceanic.ClientApplication & Oceanic.JSONApplication).verifyKey
+    async load() {
+        await this.command.loadCommand(path.resolve(__dirname, '../', 'commands'))
+        await this.command.loadAutoCompleteFromCommands(this.command.commands)
+        return this
     }
 
     async connect() {
-        await this.command.loadCommand(path.resolve(__dirname, '../', 'commands'))
-        await this.command.loadArgumentsFromCommands(this.command.commands)
         await this.restMode()
     }
 }

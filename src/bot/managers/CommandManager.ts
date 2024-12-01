@@ -23,7 +23,7 @@ export class CommandManager {
         }
     }
 
-    async loadArgumentsFromCommands(commands: AnyCommand<CommandArguments>[], baseName: string = "") {
+    async loadAutoCompleteFromCommands(commands: AnyCommand<CommandArguments>[], baseName: string = "") {
         for(const anyCommand of commands) {
             if(anyCommand.type == "command") {
                 for(const arg of Object.values(anyCommand.args)) {
@@ -31,7 +31,7 @@ export class CommandManager {
                     this.internalCacheAutocomplete.set(`${baseName ? `${baseName} ${anyCommand.name}` : anyCommand.name} ${arg.name}`, arg.autocomplete)
                 }
             }
-            else this.loadArgumentsFromCommands(anyCommand.commands, `${baseName} ${anyCommand.name}`)
+            else this.loadAutoCompleteFromCommands(anyCommand.commands, `${baseName} ${anyCommand.name}`)
         }
     }
 

@@ -28,11 +28,6 @@ export class Button {
     style: Oceanic.ButtonStyles = 1
     type = 2
 
-    addArgument(key: string, value: string) {
-        this.customID+=`;${key}:${value}`
-        return this
-    }
-
     setID(id: string) {
         this.customID = id
         this.url = undefined

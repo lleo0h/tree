@@ -42,10 +42,9 @@ export default createCommand({
                 new ActionRow()
                     .addComponent(
                         new Button()
-                            .setID(`button`)
+                            .setID(`button;mention:${ctx.args.mention}`)
                             .setLabel("button")
                             .setStyle("SECONDARY")
-                            .addArgument("mention", `${ctx.args.mention}`)
                     )
             ]
         })
@@ -56,7 +55,6 @@ export const interaction_button = createInteraction({
     type: "button",
     name: "button",
     async run(ctx) {
-        console.log(ctx.getData("mention"))
-        ctx.data.reply({content: "button stateless", flags: 64})
+        ctx.data.reply({content: `button stateless ${ctx.getData("mention")}`, flags: 64})
     }
 })
