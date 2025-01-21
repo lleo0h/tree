@@ -19,6 +19,7 @@ export type CommandArgumentTypes = {
 export interface Command<T extends CommandArguments> extends Omit<Oceanic.CreateChatInputApplicationCommandOptions, "type"> {
     args: T
     type: "command"
+    component?: boolean
     run(ctx: CommandContext<T>): Promise<Oceanic.MessageInteractionResponse<Oceanic.CommandInteraction<Oceanic.AnyInteractionChannel | Oceanic.Uncached, Oceanic.ApplicationCommandTypes>>>
 }
 
@@ -43,8 +44,11 @@ export class CommandContext<T extends CommandArguments> {
         this.data = data
     }
 
-    async reply(content: string | Oceanic.InteractionContent) {
+    async reply(content: string | Oceanic.InteractionContent & { embed?: Oceanic.EmbedOptions }) {
         if(typeof content == "string") content = { content }
+        if(content.embed) {
+            content.embeds ? content.embeds.unshift(content.embed) : content.embeds = [content.embed]
+        }
         return this.data.reply(content)
     }
 }

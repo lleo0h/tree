@@ -2,7 +2,8 @@
   "main": "src/index.ts",
   "scripts": {
     "build": "tsc",
-    "start": "node --env-file=.env dist/src/index.js"
+    "start": "node --env-file=.env dist/src/index.js",
+    "start:slash": "node --env-file=.env dist/scripts/bulkEditGlobalCommands.js"
   },
   "dependencies": {
     "discord-interactions": "^4.1.0",
