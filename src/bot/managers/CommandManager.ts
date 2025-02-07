@@ -163,7 +163,7 @@ export class CommandManager {
         autocomplete: NonNullable<CommandArgument["autocomplete"]>
         interaction: Oceanic.AutocompleteInteraction
     }) {
-        return autocomplete(interaction)
+        return await autocomplete(interaction)
     }
 
     async runInteraction({ interaction }: DataInteractionRunner) {
