@@ -3,35 +3,18 @@ import * as Oceanic from "oceanic.js"
 import { AnyCommand, CommandArguments, Group, Command, CommandContext, GetTypeFromCommandArgument, CommandArgument } from "../models/createCommand.js"
 import { InternalInteraction, Interaction, InteractionTypes, InteractionContext } from "../models/createInteraction.js"
 
+type GenerateDataRunner<T extends string, K extends any> = { 
+    type: T
+    interaction: K
+}
+type DataCommandRunner = GenerateDataRunner<"slash", Oceanic.CommandInteraction> | GenerateDataRunner<"component", Oceanic.ComponentInteraction>
+type DataInteractionRunner = GenerateDataRunner<"row", Oceanic.ComponentInteraction> | GenerateDataRunner<"modal", Oceanic.ModalSubmitInteraction>
+
 export class CommandManager {
+    PREFIX = ".."
     commands = new Map<string, AnyCommand<CommandArguments>>()
     interactions = new Map<string, Interaction<keyof InteractionTypes>>()
     autocompletes = new Map<string, CommandArgument["autocomplete"]>() //Reference CommandArg
-    private client: Oceanic.Client
-
-    constructor(client: Oceanic.Client) {
-        this.client = client
-    }
-
-    async loadAutoCompleteFromCommands(commands: AnyCommand<CommandArguments>[], baseName: string = "") {
-        for(const anyCommand of commands) {
-            if(anyCommand.type == "command") {
-                for(const arg of Object.values(anyCommand.args)) {
-                    if(!arg.autocomplete) continue
-                    this.autocompletes.set(`${baseName ? `${baseName} ${anyCommand.name}` : anyCommand.name} ${arg.name}`, arg.autocomplete)
-                }
-            }
-            else this.loadAutoCompleteFromCommands(Array.from(anyCommand.commands.values()), `${baseName} ${anyCommand.name}`)
-        }
-    }
-
-    private loadCommandInteraction(imports: {[key: string]: any}) {
-        for(const i of Object.values(imports)) {
-            if(i instanceof InternalInteraction) {
-                this.interactions.set(i.data.name, i.data)
-            }
-        }
-    }
 
     async loadCommand(dir: string, internal_group?: Group) {
         let group = internal_group
@@ -39,7 +22,7 @@ export class CommandManager {
         const index = readdir.find(i => i.startsWith("index"))
         if(index) {
             readdir.splice(readdir.indexOf(index), 1)
-            group = (await import(`${dir}/index.js`)).default as Group
+            group = (await import(`${dir}/${index}`)).default as Group
             if(!internal_group) {
                 this.commands.set(group.name, group)
             } else internal_group.commands.set(group.name, group)
@@ -61,6 +44,92 @@ export class CommandManager {
         }
     }
 
+    private loadCommandInteraction(imports: {[key: string]: any}) {
+        for(const i of Object.values(imports)) {
+            if(i instanceof InternalInteraction) {
+                this.interactions.set(i.data.name, i.data)
+            }
+        }
+    }
+
+    async loadAutoCompleteFromCommand(commands: AnyCommand<CommandArguments>[], baseName: string = "") {
+        for(const anyCommand of commands) {
+            if(anyCommand.type == "command") {
+                for(const arg of Object.values(anyCommand.args)) {
+                    if(!arg.autocomplete) continue
+                    this.autocompletes.set(`${baseName ? `${baseName} ${anyCommand.name}` : anyCommand.name} ${arg.name}`, arg.autocomplete)
+                }
+            }
+            else this.loadAutoCompleteFromCommand(Array.from(anyCommand.commands.values()), `${baseName} ${anyCommand.name}`)
+        }
+    }
+
+    async createCommandArgs<T extends CommandArguments>(
+        command: Command<CommandArguments>,
+        response: Oceanic.CommandInteraction | Oceanic.ComponentInteraction | Oceanic.Message
+    ) {
+        const data = {} as { [K in keyof T]: GetTypeFromCommandArgument<T[K]> }
+        const fromArgs = Object.entries(command.args)
+        let args: Oceanic.InteractionOptionsWithValue[] = []
+        if(response instanceof Oceanic.CommandInteraction) {
+            let raw = response.data.options.raw
+            for(const r of raw) {
+                if(r.type == 1 || r.type == 2) {
+                    if(!r.options) break
+                    raw = r.options
+                }
+            }
+            args = (raw as Oceanic.InteractionOptionsWithValue[]).map(i => {
+                return {
+                    name: fromArgs.find(arg => arg[1].name == i.name)?.[0],
+                    type:  i.type,
+                    value: i.value
+                }
+            }) as Oceanic.InteractionOptionsWithValue[]
+        }
+        else {
+            let content: string[] = []
+            if(response instanceof Oceanic.Message) {
+                content = response.content
+                    .slice(this.PREFIX.length)
+                    .split(" ")
+                    .slice(response.content.slice(this.PREFIX.length).split(" ").indexOf(command.name) + 1)
+            } else {
+                content = response.data.customID.split(";").slice(1)
+            }
+            args = fromArgs.map((i, index) => {
+                return {
+                    name: i[0],
+                    type: command.args[i[0]].type,
+                    value: content[index]
+                }
+            }) as Oceanic.InteractionOptionsWithValue[]
+        }
+
+        for(const arg of args) {
+            switch(arg.type) {
+                case Oceanic.ApplicationCommandOptionTypes.USER: {
+                    if(!arg.value && command.args[arg.name].required) throw command.args[arg.name].required!.message
+                    let user: Oceanic.User | undefined
+                    if(response instanceof Oceanic.CommandInteraction) {
+                        user = response.data.resolved.users.get(arg.value)
+                    } else user = await response.client.rest.users.get(arg.value?.replace(/[<@>]/, ""))
+                    ;(data[arg.name] as Oceanic.User | undefined) = user
+                    break
+                }
+                case Oceanic.ApplicationCommandOptionTypes.NUMBER: {
+                    if(isNaN(arg.value) == true && command.args[arg.name].required) throw command.args[arg.name].required!.message
+                    ;(data[arg.name] as number | undefined) = Number(arg.value)
+                    break
+                }
+                default: 
+                    if(!arg.value && command.args[arg.name].required) throw command.args[arg.name].required!.message
+                    ;(data[arg.name] as never | undefined) = arg.value as never     
+            }
+        }
+        return data
+    }
+
     getCommand(name: string[]): Command<CommandArguments> | undefined {
         let command: AnyCommand<CommandArguments> | undefined = this.commands.get(name[0])
         for(let i = 1; i < name.length; i++) {
@@ -71,68 +140,34 @@ export class CommandManager {
         if(command?.type == "group") throw new Error("Groups cannot be executed directly as they only store commands.")
         return command
     }
-
-    createArgs<T extends CommandArguments>(
-        command: Command<CommandArguments>,
-        interaction: Oceanic.CommandInteraction
-    ) {
-        const data = {} as { [K in keyof T]: GetTypeFromCommandArgument<T[K]> }
-        const fromArgs = Object.entries(command.args)
-        for(const value of interaction.data.options.getOptions()) {
-            const key = String(fromArgs.find(i => i[1].name == value.name)?.[0])
-            switch(value.type) {
-                case Oceanic.ApplicationCommandOptionTypes.USER: {
-                    (data[key] as Oceanic.User | undefined) = interaction.data.resolved.users.get(value.value)
-                    break
-                }
-                default: 
-                    ;(data[key] as never | undefined) = value.value as never
-            }
-        }
-        return data
-    }
-
-    async runCommand(data: Oceanic.RawApplicationCommandInteraction) {
-        const i = new Oceanic.CommandInteraction(data, this.client)
-        const content = [i.data.name].concat(i.data.options.getSubCommand() || [])
-        const command = this.getCommand(content)
-        if(!command) return
-        const ctx = new CommandContext(i)
-        ctx.args = this.createArgs(command, i)
-        command.run(ctx)
-    }
-
-    async runInteraction(data: Oceanic.RawMessageComponentInteraction) {
-        const args = data.data.custom_id.split(";")
-        const interaction = this.interactions.get(args[0])
-        if(!interaction) return
-        const i = new Oceanic.ComponentInteraction(data as unknown as Oceanic.RawMessageComponentInteraction, this.client)
-        if(i.data.componentType == 2 && interaction.type == "button") {
-            interaction.run(new InteractionContext(i, args))
-        } 
-        else if([3, 4, 5, 6, 7, 8].includes(i.data.componentType) && interaction.type == "menu") {
-            interaction.run(new InteractionContext(i, args))
-        }
-    }
-
-    async runModalSubmit(data: Oceanic.RawModalSubmitInteraction) {
-        const i = new Oceanic.ModalSubmitInteraction(data as Oceanic.RawModalSubmitInteraction, this.client)
-        const args = data.data.custom_id.split(";")
-        const interaction = this.interactions.get(args[0])
-        if(!interaction) return
-        interaction.run(new InteractionContext(i, args))
-    }
-
-    async runAutoComplete(data: Oceanic.RawAutocompleteInteraction) {
-        const i = new Oceanic.AutocompleteInteraction(data, this.client)
-        const focused = ([i.data.name]
-            .concat(
-                i.data.options.getSubCommand() || [], 
-                i.data.options.getFocused()?.name || [])
+    
+    getAutoComplete(interaction: string | Oceanic.AutocompleteInteraction) {
+        const focused = typeof interaction === "string" ? interaction : (
+            [interaction.data.name]
+                .concat(
+                    interaction.data.options.getSubCommand() || [], 
+                    interaction.data.options.getFocused()?.name || []
+                )
             )
             .join(" ")
+        return this.autocompletes.get(focused)
+    }
 
-        const autocomplete = this.autocompletes.get(focused)
-        if(autocomplete) autocomplete(i)
+    async runCommand({ command, interaction }: DataCommandRunner & { command: Command<CommandArguments> }) {
+        const ctx = new CommandContext(interaction)
+        ctx.args = await this.createCommandArgs(command, interaction)
+        await command.run(ctx)
+    }
+
+    async runAutoComplete({ autocomplete, interaction }: {
+        autocomplete: NonNullable<CommandArgument["autocomplete"]>
+        interaction: Oceanic.AutocompleteInteraction
+    }) {
+        return autocomplete(interaction)
+    }
+
+    async runInteraction({ interaction }: DataInteractionRunner) {
+        const args = interaction.data.customID.split(";")
+        return await this.interactions.get(args[0])?.run(new InteractionContext(interaction, args))
     }
 }

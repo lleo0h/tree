@@ -1,9 +1,9 @@
-import { Client } from "../src/bot/structures/Client.js"
+import { Client, __dir } from "../src/bot/structures/Client.js"
 
 const time = Date.now()
 const client = new Client(process.env.APPLICATION_TOKEN as string)
 client.connect().then(async () => {
-    await client.command.loadCommand(`${__dirname}/../src/bot/commands`)
+    await client.command.loadCommand(`${__dir}/commands`)
     await client.application.bulkEditGlobalCommands(
         client.mappingSlash(Array.from(client.command.commands.values()))
     )

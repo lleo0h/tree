@@ -14,16 +14,45 @@ export const route_interaction: FastifyPluginAsync = async (fastify) => {
     fastify.post("/discord/interactions", (req, reply) => {
         const data = req.body as Oceanic.AnyRawInteraction
         switch(data.type) {
-            case Oceanic.InteractionTypes.PING:
-                reply.send({ type: 1 }); break
-            case Oceanic.InteractionTypes.APPLICATION_COMMAND:
-                client.command.runCommand(data as Oceanic.RawApplicationCommandInteraction); break
-            case Oceanic.InteractionTypes.MESSAGE_COMPONENT:
-                client.command.runInteraction(data as Oceanic.RawMessageComponentInteraction); break
-            case Oceanic.InteractionTypes.MODAL_SUBMIT:
-                client.command.runModalSubmit(data as Oceanic.RawModalSubmitInteraction); break
-            case Oceanic.InteractionTypes.APPLICATION_COMMAND_AUTOCOMPLETE:
-                client.command.runAutoComplete(data as Oceanic.RawAutocompleteInteraction); break
+            case Oceanic.InteractionTypes.PING: {
+                return { type: 1 }
+            }
+            case Oceanic.InteractionTypes.APPLICATION_COMMAND: {
+                const interaction = new Oceanic.CommandInteraction(data as Oceanic.RawApplicationCommandInteraction, client)
+                const command = client.command.getCommand([interaction.data.name].concat(interaction.data.options.getSubCommand() || []))
+                if(command) {
+                    client.command.runCommand({
+                        type: "slash", command, interaction
+                    })
+                } break
+            }
+            case Oceanic.InteractionTypes.MESSAGE_COMPONENT: {
+                const interaction = new Oceanic.ComponentInteraction(data as Oceanic.RawMessageComponentInteraction, client)
+                if(interaction.data.customID.startsWith("_")) {
+                    client.command.runInteraction({
+                        interaction, type: "row"
+                    })
+                } else {
+                    const name = interaction.data.customID.split(";")[0]
+                    const command = client.command.getCommand([name])
+                    if(command && command.component === true) client.command.runCommand({
+                        type: "component",
+                        command,
+                        interaction
+                    })
+                } break
+            }
+            case Oceanic.InteractionTypes.APPLICATION_COMMAND_AUTOCOMPLETE: {
+                const interaction = new Oceanic.AutocompleteInteraction(data as Oceanic.RawAutocompleteInteraction, client)
+                const autocomplete = client.command.getAutoComplete(interaction)
+                if(!autocomplete) return
+                client.command.runAutoComplete({ interaction, autocomplete })
+                break
+            }
+            case Oceanic.InteractionTypes.MODAL_SUBMIT: {
+                const interaction = new Oceanic.ModalSubmitInteraction(data as Oceanic.RawModalSubmitInteraction, client)
+                client.command.runInteraction({ interaction, type: "modal" })
+            }
         }
     })
 }

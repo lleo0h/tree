@@ -1,10 +1,14 @@
 import * as Oceanic from "oceanic.js"
+import { Client } from "../structures/Client.js"
 
-export type CommandArgument = Oceanic.ApplicationCommandOptionBase & {
+export type CommandArgument = Omit<Oceanic.ApplicationCommandOptionBase, "required"> & {
     /*
         add conditional types
         channel, autocomplete and outhers
     */
+    required?: {
+        message: string
+    }
     autocomplete?: (i: Oceanic.AutocompleteInteraction) => Promise<unknown>
 }
 
@@ -20,7 +24,7 @@ export interface Command<T extends CommandArguments> extends Omit<Oceanic.Create
     args: T
     type: "command"
     component?: boolean
-    run(ctx: CommandContext<T>): Promise<Oceanic.MessageInteractionResponse<Oceanic.CommandInteraction<Oceanic.AnyInteractionChannel | Oceanic.Uncached, Oceanic.ApplicationCommandTypes>>>
+    run(ctx: CommandContext<T>): Promise<Oceanic.Message>
 }
 
 export interface Group extends Omit<Oceanic.CreateChatInputApplicationCommandOptions, "type"> {
@@ -35,21 +39,23 @@ export type AnyDataCommand<T extends CommandArguments> = Command<T> | Omit<Group
 export type GetTypeFromCommandArgument<T extends CommandArgument> = T["type"] extends keyof CommandArgumentTypes ? (T["required"] extends true ? CommandArgumentTypes[T["type"]] : CommandArgumentTypes[T["type"]] | undefined) : never
 
 export class CommandContext<T extends CommandArguments> {
-    data: Oceanic.CommandInteraction
+    data: Oceanic.CommandInteraction | Oceanic.ComponentInteraction //change type
+    client: Client
     args = {} as {
         [K in keyof T]: GetTypeFromCommandArgument<T[K]>
     }
 
-    constructor(data: Oceanic.CommandInteraction) {
+    constructor(data: Oceanic.CommandInteraction | Oceanic.ComponentInteraction) {
         this.data = data
+        this.client = this.data.client as Client
     }
 
-    async reply(content: string | Oceanic.InteractionContent & { embed?: Oceanic.EmbedOptions }) {
+    async reply(content: string | Oceanic.InteractionContent & { embed?: Oceanic.EmbedOptions }): Promise<Oceanic.Message> {
         if(typeof content == "string") content = { content }
-        if(content.embed) {
-            content.embeds ? content.embeds.unshift(content.embed) : content.embeds = [content.embed]
-        }
-        return this.data.reply(content)
+        if(content.embed) content.embeds ? content.embeds.push(content.embed) : content.embeds = [content.embed]
+        return (
+            await this.data.reply(content)
+        ).getMessage()
     }
 }
 

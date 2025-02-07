@@ -13,8 +13,7 @@ export default createCommand({
             type: Oceanic.ApplicationCommandOptionTypes.STRING,
             name: "mention",
             description: "Write something for me to always remember, 36 bytes limit.",
-            maxLength: 36,
-            required: true
+            maxLength: 36
         }
     },
     async run(ctx) {
@@ -34,8 +33,8 @@ export default createCommand({
 })
 
 export const _dmail = createInteraction({
-    name: "_dmail",
     type: "button",
+    name: "_dmail",
     async run(ctx) {
         const [, email] = ctx.args
         ctx.data.reply({ content: email, flags: 64 })
